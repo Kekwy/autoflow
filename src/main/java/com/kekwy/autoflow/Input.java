@@ -1,4 +1,4 @@
 package com.kekwy.autoflow;
 
-public class Input {
+public interface Input<T> {
 }

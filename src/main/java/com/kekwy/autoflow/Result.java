@@ -1,4 +1,4 @@
 package com.kekwy.autoflow;
 
-public class Result {
+public class Result<T> {
 }
