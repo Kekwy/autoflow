@@ -1,4 +1,4 @@
-package com.kekwy.autoflow;
+package com.kekwy.autoflow.exception;
 
 public class AutoFlowException extends RuntimeException {
     public AutoFlowException(String message) {

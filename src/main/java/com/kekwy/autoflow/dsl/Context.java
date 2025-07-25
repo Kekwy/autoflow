@@ -1,4 +1,4 @@
-package com.kekwy.autoflow;
+package com.kekwy.autoflow.dsl;
 
 public interface Context<I> {
 

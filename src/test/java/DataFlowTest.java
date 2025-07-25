@@ -1,6 +1,6 @@
 import com.kekwy.autoflow.DataFlow;
-import com.kekwy.autoflow.Result;
-import com.kekwy.autoflow.Task;
+import com.kekwy.autoflow.dsl.Result;
+import com.kekwy.autoflow.dsl.Task;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

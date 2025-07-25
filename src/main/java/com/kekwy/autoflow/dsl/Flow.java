@@ -1,4 +1,6 @@
-package com.kekwy.autoflow;
+package com.kekwy.autoflow.dsl;
+
+import com.kekwy.autoflow.DataFlow;
 
 public interface Flow<I, O> {
 
