@@ -8,6 +8,5 @@ import java.util.concurrent.ExecutorService;
 
 public interface Executor<I, O> {
 
-    O execute(ContextModel<I> context, Collection<TaskModel<I, ?>> taskList,
-              TaskModel<I, O> outputTask, ExecutorService executorService);
+    O execute(ContextModel<I> context, TaskModel<I, O> outputTask, ExecutorService executorService);
 }

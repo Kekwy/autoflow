@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
 public class DefaultExecutor<I, O> implements Executor<I, O> {
 
     // TODO: move into context.
-    private Collection<TaskModel<I, ?>> taskList;
     private TaskModel<I, O> outputTask;
     private ExecutorService executorService;
     private boolean complete = false;
@@ -30,22 +29,21 @@ public class DefaultExecutor<I, O> implements Executor<I, O> {
     private ContextModel<I> contextModel;
 
     @Override
-    public O execute(ContextModel<I> contextModel, Collection<TaskModel<I, ?>> taskList,
-                     TaskModel<I, O> outputTask, ExecutorService executorService) {
+    public O execute(ContextModel<I> contextModel, TaskModel<I, O> outputTask, ExecutorService executorService) {
         this.context = new ContextImpl<>(contextModel);
         this.contextModel = contextModel;
-        this.taskList = taskList;
         this.outputTask = outputTask;
         this.executorService = executorService;
         Map<TaskModel<I, ?>, Integer> outdegreeMap = new HashMap<>();
-        outdegreeMap.put(outputTask, outputTask.getDependents().size());
+        outdegreeMap.put(outputTask, outputTask.getDependencies().size());
         Queue<TaskModel<I, ?>> bfsQueue = new LinkedList<>();
         bfsQueue.add(outputTask);
         while (!bfsQueue.isEmpty()) {
             TaskModel<I, ?> task = Optional.ofNullable(bfsQueue.poll()).orElseThrow(IllegalStateException::new);
             for (TaskModel<I, ?> dependency : task.getDependencies()) {
                 if (!outdegreeMap.containsKey(dependency)) {
-                    outdegreeMap.put(dependency, dependency.getDependents().size());
+                    outdegreeMap.put(dependency, dependency.getDependencies().size());
+                    bfsQueue.add(dependency);
                 }
             }
         }
@@ -82,11 +80,12 @@ public class DefaultExecutor<I, O> implements Executor<I, O> {
         Object o = task.getFunction().apply(context);
         synchronized (contextLock) {
             contextModel.set(task.getResult(), o);
-        }
-        if (task == outputTask) {
-            complete = true;
-            contextLock.notify();
-            return;
+
+            if (task == outputTask) {
+                complete = true;
+                contextLock.notify();
+                return;
+            }
         }
         synchronized (indegreeMapLock) {
             for (TaskModel<I, ?> dependent : task.getDependents()) {

@@ -24,12 +24,10 @@ public class DataFlow<I, O> {
 
     @Getter
     private final String name;
-    private final Collection<TaskModel<I, ?>> tasks;
     private final TaskModel<I, O> outputTask;
 
-    private DataFlow(String name, Collection<TaskModel<I, ?>> tasks, TaskModel<I, O> outputTask) {
+    private DataFlow(String name, TaskModel<I, O> outputTask) {
         this.name = name;
-        this.tasks = tasks;
         this.outputTask = outputTask;
     }
 
@@ -40,7 +38,7 @@ public class DataFlow<I, O> {
     public O launch(I input, ExecutorService executorService) {
         ContextModel<I> context = new ContextModel<>(input);
         Executor<I, O> executor = new DefaultExecutor<>();
-        return executor.execute(context, tasks, outputTask, executorService);
+        return executor.execute(context, outputTask, executorService);
     }
 
     public void print() {
@@ -69,7 +67,7 @@ public class DataFlow<I, O> {
 
         public DataFlow<I, O> get() {
             state.setStage(StateModel.Stage.COMPLETE);
-            return new DataFlow<>(name, taskModelMap.values(), outputTask);
+            return new DataFlow<>(name, outputTask);
         }
 
         @Override

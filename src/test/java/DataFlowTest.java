@@ -3,6 +3,9 @@ import com.kekwy.autoflow.dsl.Result;
 import com.kekwy.autoflow.dsl.Task;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class DataFlowTest {
@@ -55,9 +58,11 @@ public class DataFlowTest {
 
                 Task<Integer> task6 = flow.task("task6", () -> {
                     task3.result();
-                    task4.result();
-                    task5.result();
-                    return (ctx) -> 1;
+                    Result<Integer> result4 = task4.result();
+                    Result<Integer> result5 = task5.result();
+                    return (ctx) -> {
+                        return ctx.get(result4) + ctx.get(result5);
+                    };
                 });
 
                 flow.output(task6);
@@ -68,6 +73,9 @@ public class DataFlowTest {
         dataFlow.print();
 
         TestInput input = new TestInput();
+        input.inc = 1;
+        input.idx = 3;
+        input.list = Arrays.asList(1, 2, 3, 4, 54, 623);
 
         Integer result = dataFlow.launch(input);
         System.out.println(result);
