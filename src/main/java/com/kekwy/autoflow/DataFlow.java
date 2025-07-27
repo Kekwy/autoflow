@@ -1,6 +1,5 @@
 package com.kekwy.autoflow;
 
-import com.kekwy.autoflow.dsl.Context;
 import com.kekwy.autoflow.dsl.Flow;
 import com.kekwy.autoflow.dsl.Result;
 import com.kekwy.autoflow.dsl.Task;
@@ -11,12 +10,13 @@ import com.kekwy.autoflow.exception.AutoFlowException;
 import com.kekwy.autoflow.model.ContextModel;
 import com.kekwy.autoflow.model.StateModel;
 import com.kekwy.autoflow.model.TaskModel;
+import com.kekwy.autoflow.util.Printer;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -24,12 +24,12 @@ public class DataFlow<I, O> {
 
     @Getter
     private final String name;
-    private final List<Task<?>> taskList;
-    private final Task<O> outputTask;
+    private final Collection<TaskModel<?>> tasks;
+    private final TaskModel<O> outputTask;
 
-    private DataFlow(String name, List<Task<?>> taskList, Task<O> outputTask) {
+    private DataFlow(String name, Collection<TaskModel<?>> tasks, TaskModel<O> outputTask) {
         this.name = name;
-        this.taskList = taskList;
+        this.tasks = tasks;
         this.outputTask = outputTask;
     }
 
@@ -40,7 +40,14 @@ public class DataFlow<I, O> {
     public O launch(I input, ExecutorService executorService) {
         ContextModel<I> context = new ContextModel<>(input);
         Executor<O> executor = new DefaultExecutor<>();
-        return executor.execute(context, taskList, outputTask, executorService);
+        return executor.execute(context, tasks, outputTask, executorService);
+    }
+
+    public void print() {
+        System.out.println("================ tasks graph begin ================\n" +
+                Printer.toPlantuml(outputTask) +
+                "================ tasks graph end   ================\n"
+        );
     }
 
     @FunctionalInterface
@@ -50,34 +57,43 @@ public class DataFlow<I, O> {
 
     private static class FlowImpl<I, O> implements Flow<I, O> {
 
-        //        private final DataFlow<I, O> dataFlow;
-        private final StateModel state;
+        private final String name;
+        private final Map<Task<?>, TaskModel<?>> taskModelMap = new HashMap<>();
+        private TaskModel<O> outputTask;
+        private final StateModel state = new StateModel();
 
         public FlowImpl(String name) {
-//            dataFlow = new DataFlow<>(name);
-            this.state = new StateModel();
+            this.name = name;
             state.setStage(StateModel.Stage.DEFINE_FLOW);
         }
 
         public DataFlow<I, O> get() {
-//            return dataFlow;
-            return null;
+            return new DataFlow<>(name, taskModelMap.values(), outputTask);
         }
 
         @Override
         public void output(Task<O> task) {
-
+            try {
+                //noinspection unchecked
+                outputTask = (TaskModel<O>) Optional.ofNullable(taskModelMap.get(task))
+                        .orElseThrow(() -> new AutoFlowException("No such task: " + task));
+            } catch (ClassCastException e) {
+                throw new AutoFlowException(e);
+            }
         }
 
         @Override
-        public <R> Task<R> task(String name, Task.Supplier<I, R> supplier) {
-            TaskModel<R> taskModel = new TaskModel<>(name, state);
+        public <R> Task<R> task(String name, TaskFunction.Supplier<I, R> supplier) {
+            TaskModel<R> taskModel = new TaskModel<>(name);
 
-            state.setStage(StateModel.Stage.DEFINE_TASK);
             state.setTask(taskModel);
+            state.setStage(StateModel.Stage.DEFINE_TASK);
 
-            new TaskImpl<>(name, taskModel, state, supplier.get());
-            return null;
+            TaskImpl<R> task = new TaskImpl<>(name, taskModel, state, supplier.get());
+
+            state.setStage(StateModel.Stage.DEFINE_FLOW);
+            taskModelMap.put(task, taskModel);
+            return task;
         }
 
     }
@@ -112,7 +128,7 @@ public class DataFlow<I, O> {
                     throw new AutoFlowException(NOTICE);
                 case DEFINE_TASK: {
                     // process dependencies
-                    this.taskModel.addDependency(state.getTask());
+                    this.taskModel.addDependent(state.getTask());
                 }
             }
             return taskModel.getResult();

@@ -6,8 +6,4 @@ public interface Task<T> {
 
     Result<T> result();
 
-    interface Supplier<I, T> {
-        TaskFunction<I, T> get();
-    }
-
 }

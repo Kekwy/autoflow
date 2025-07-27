@@ -17,20 +17,22 @@ public class TaskModel<T> {
     private final List<TaskModel<?>> dependencies = new ArrayList<>();
 
     @Getter
+    private final List<TaskModel<?>> dependents = new ArrayList<>();
+
+    @Getter
     private final Result<T> result = new Result<T>() {
     };
 
     @Getter
     private final String name;
 
-    private final StateModel state;
-
     @Getter
     @Setter
     private TaskFunction<?, T> function;
 
-    public void addDependency(TaskModel<?> dependency) {
-        dependencies.add(dependency);
+    public void addDependent(TaskModel<?> dependency) {
+        dependents.add(dependency);
+        dependency.dependencies.add(this);
     }
 
 }

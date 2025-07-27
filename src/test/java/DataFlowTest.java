@@ -43,11 +43,29 @@ public class DataFlowTest {
                     };
                 });
 
-                flow.output(task3);
+                Task<Integer> task4 = flow.task("task4", () -> {
+                    task1.result();
+                    task2.result();
+                    return (ctx) -> 111;
+                });
+
+                Task<Integer> task5 = flow.task("task5", () ->
+                        (ctx) -> 1
+                );
+
+                Task<Integer> task6 = flow.task("task6", () -> {
+                    task3.result();
+                    task4.result();
+                    task5.result();
+                    return (ctx) -> 1;
+                });
+
+                flow.output(task6);
             });
 
     @Test
     public void test1() {
+        dataFlow.print();
 
         TestInput input = new TestInput();
 
