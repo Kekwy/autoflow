@@ -24,10 +24,10 @@ public class DataFlow<I, O> {
 
     @Getter
     private final String name;
-    private final Collection<TaskModel<?>> tasks;
-    private final TaskModel<O> outputTask;
+    private final Collection<TaskModel<I, ?>> tasks;
+    private final TaskModel<I, O> outputTask;
 
-    private DataFlow(String name, Collection<TaskModel<?>> tasks, TaskModel<O> outputTask) {
+    private DataFlow(String name, Collection<TaskModel<I, ?>> tasks, TaskModel<I, O> outputTask) {
         this.name = name;
         this.tasks = tasks;
         this.outputTask = outputTask;
@@ -39,7 +39,7 @@ public class DataFlow<I, O> {
 
     public O launch(I input, ExecutorService executorService) {
         ContextModel<I> context = new ContextModel<>(input);
-        Executor<O> executor = new DefaultExecutor<>();
+        Executor<I, O> executor = new DefaultExecutor<>();
         return executor.execute(context, tasks, outputTask, executorService);
     }
 
@@ -58,9 +58,9 @@ public class DataFlow<I, O> {
     private static class FlowImpl<I, O> implements Flow<I, O> {
 
         private final String name;
-        private final Map<Task<?>, TaskModel<?>> taskModelMap = new HashMap<>();
-        private TaskModel<O> outputTask;
-        private final StateModel state = new StateModel();
+        private final Map<Task<?>, TaskModel<I, ?>> taskModelMap = new HashMap<>();
+        private TaskModel<I, O> outputTask;
+        private final StateModel<I> state = new StateModel<>();
 
         public FlowImpl(String name) {
             this.name = name;
@@ -68,6 +68,7 @@ public class DataFlow<I, O> {
         }
 
         public DataFlow<I, O> get() {
+            state.setStage(StateModel.Stage.COMPLETE);
             return new DataFlow<>(name, taskModelMap.values(), outputTask);
         }
 
@@ -75,7 +76,7 @@ public class DataFlow<I, O> {
         public void output(Task<O> task) {
             try {
                 //noinspection unchecked
-                outputTask = (TaskModel<O>) Optional.ofNullable(taskModelMap.get(task))
+                outputTask = (TaskModel<I, O>) Optional.ofNullable(taskModelMap.get(task))
                         .orElseThrow(() -> new AutoFlowException("No such task: " + task));
             } catch (ClassCastException e) {
                 throw new AutoFlowException(e);
@@ -84,12 +85,12 @@ public class DataFlow<I, O> {
 
         @Override
         public <R> Task<R> task(String name, TaskFunction.Supplier<I, R> supplier) {
-            TaskModel<R> taskModel = new TaskModel<>(name);
+            TaskModel<I, R> taskModel = new TaskModel<>(name);
 
             state.setTask(taskModel);
             state.setStage(StateModel.Stage.DEFINE_TASK);
 
-            TaskImpl<R> task = new TaskImpl<>(name, taskModel, state, supplier.get());
+            TaskImpl<I, R> task = new TaskImpl<>(name, taskModel, state, supplier.get());
 
             state.setStage(StateModel.Stage.DEFINE_FLOW);
             taskModelMap.put(task, taskModel);
@@ -104,14 +105,14 @@ public class DataFlow<I, O> {
         return flow.get();
     }
 
-    private static class TaskImpl<T> implements Task<T> {
+    private static class TaskImpl<I, R> implements Task<R> {
 
         @Getter
         private final String name;
-        private final TaskModel<T> taskModel;
-        private final StateModel state;
+        private final TaskModel<I, R> taskModel;
+        private final StateModel<I> state;
 
-        public TaskImpl(String name, TaskModel<T> taskModel, StateModel state, TaskFunction<?, T> function) {
+        public TaskImpl(String name, TaskModel<I, R> taskModel, StateModel<I> state, TaskFunction<I, R> function) {
             this.name = name;
             this.taskModel = taskModel;
             this.state = state;
@@ -121,10 +122,10 @@ public class DataFlow<I, O> {
         private static final String NOTICE = "Results are only available when defining task, not during the stage.";
 
         @Override
-        public Result<T> result() {
+        public Result<R> result() {
             switch (state.getStage()) {
                 case DEFINE_FLOW:
-                case RUNTIME:
+                case COMPLETE:
                     throw new AutoFlowException(NOTICE);
                 case DEFINE_TASK: {
                     // process dependencies

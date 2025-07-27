@@ -15,11 +15,11 @@ public class ContextModel<I> {
     @Getter
     private final I input;
 
-    public <T> void set(Result<T> result, T data) {
+    public <T> void set(Result<T> result, Object data) {
         resultMap.put(result, data);
     }
 
-    public <T> T get(Result<T> result) {
+    public <T> T getResult(Result<T> result) {
         try {
             //noinspection unchecked
             return (T) resultMap.get(result);

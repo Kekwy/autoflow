@@ -11,16 +11,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RequiredArgsConstructor
-public class TaskModel<T> {
+public class TaskModel<I, R> {
 
     @Getter
-    private final List<TaskModel<?>> dependencies = new ArrayList<>();
+    private final List<TaskModel<I, ?>> dependencies = new ArrayList<>();
 
     @Getter
-    private final List<TaskModel<?>> dependents = new ArrayList<>();
+    private final List<TaskModel<I, ?>> dependents = new ArrayList<>();
 
     @Getter
-    private final Result<T> result = new Result<T>() {
+    private final Result<R> result = new Result<R>() {
     };
 
     @Getter
@@ -28,9 +28,9 @@ public class TaskModel<T> {
 
     @Getter
     @Setter
-    private TaskFunction<?, T> function;
+    private TaskFunction<I, R> function;
 
-    public void addDependent(TaskModel<?> dependency) {
+    public void addDependent(TaskModel<I, ?> dependency) {
         dependents.add(dependency);
         dependency.dependencies.add(this);
     }

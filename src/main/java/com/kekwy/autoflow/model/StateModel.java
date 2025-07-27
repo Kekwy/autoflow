@@ -3,15 +3,15 @@ package com.kekwy.autoflow.model;
 import lombok.Data;
 
 @Data
-public class StateModel {
+public class StateModel<I> {
 
     public enum Stage {
         DEFINE_FLOW,
         DEFINE_TASK,
-        RUNTIME,
+        COMPLETE,
     }
 
     private Stage stage;
-    private TaskModel<?> task;
+    private TaskModel<I, ?> task;
 
 }
