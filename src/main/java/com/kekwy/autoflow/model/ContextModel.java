@@ -15,7 +15,7 @@ public class ContextModel<I> {
     @Getter
     private final I input;
 
-    public <T> void set(Result<T> result, Object data) {
+    public void set(Result<?> result, Object data) {
         resultMap.put(result, data);
     }
 

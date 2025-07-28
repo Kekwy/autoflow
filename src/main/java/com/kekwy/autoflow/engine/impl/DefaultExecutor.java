@@ -3,41 +3,40 @@ package com.kekwy.autoflow.engine.impl;
 import com.kekwy.autoflow.dsl.Context;
 import com.kekwy.autoflow.dsl.Result;
 import com.kekwy.autoflow.engine.Executor;
+import com.kekwy.autoflow.exception.AutoFlowException;
 import com.kekwy.autoflow.model.ContextModel;
 import com.kekwy.autoflow.model.TaskModel;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 public class DefaultExecutor<I, O> implements Executor<I, O> {
 
-    // TODO: move into context.
-    private TaskModel<I, O> outputTask;
-    private ExecutorService executorService;
-    private boolean complete = false;
-    private final Object contextLock = new Object();
-    private final Object indegreeMapLock = new Object();
-    private Context<I> context;
-    private ContextModel<I> contextModel;
-
     @Override
     public O execute(ContextModel<I> contextModel, TaskModel<I, O> outputTask, ExecutorService executorService) {
-        this.context = new ContextImpl<>(contextModel);
-        this.contextModel = contextModel;
-        this.outputTask = outputTask;
-        this.executorService = executorService;
+        Context<I> context = new ContextImpl<>(contextModel);
+
+        CompletionService<ResultDTO<I>> completionService = new ExecutorCompletionService<>(executorService);
+
+        // build outdegreeMap
         Map<TaskModel<I, ?>, Integer> outdegreeMap = new HashMap<>();
         outdegreeMap.put(outputTask, outputTask.getDependencies().size());
         Queue<TaskModel<I, ?>> bfsQueue = new LinkedList<>();
         bfsQueue.add(outputTask);
+
         while (!bfsQueue.isEmpty()) {
             TaskModel<I, ?> task = Optional.ofNullable(bfsQueue.poll()).orElseThrow(IllegalStateException::new);
             for (TaskModel<I, ?> dependency : task.getDependencies()) {
@@ -47,26 +46,43 @@ public class DefaultExecutor<I, O> implements Executor<I, O> {
                 }
             }
         }
+
         List<TaskModel<I, ?>> executableTasks = getExecutableTasks(outdegreeMap);
+
         executableTasks.forEach(task ->
-                executorService.submit(() -> this.run(task, outdegreeMap))
+                completionService.submit(() -> this.run(task, context))
         );
-        O result;
-        synchronized (contextLock) {
-            if (!complete) {
-                try {
-                    contextLock.wait();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+
+        int i = executableTasks.size();
+        while (i > 0) {
+            TaskModel<I, ?> task;
+            Object data;
+            try {
+                Future<ResultDTO<I>> completedFuture = completionService.take();
+                ResultDTO<I> resultDTO = completedFuture.get();
+                task = resultDTO.getTask();
+                data = resultDTO.getData();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new AutoFlowException(e);
+            }
+
+            contextModel.set(task.getResult(), data);
+            i--;
+
+            if (task != outputTask) {
+                for (TaskModel<I, ?> dependent : task.getDependents()) {
+                    Integer outdegree = outdegreeMap.get(dependent);
+                    outdegree--;
+                    outdegreeMap.put(dependent, outdegree);
+                    if (outdegree == 0) {
+                        completionService.submit(() -> run(dependent, context));
+                        i++;
+                    }
                 }
             }
-            if (complete) {
-                result = contextModel.getResult(outputTask.getResult());
-            } else {
-                throw new IllegalStateException();
-            }
         }
-        return result;
+
+        return contextModel.getResult(outputTask.getResult());
     }
 
     private List<TaskModel<I, ?>> getExecutableTasks(Map<TaskModel<I, ?>, Integer> outdegreeMap) {
@@ -76,28 +92,16 @@ public class DefaultExecutor<I, O> implements Executor<I, O> {
                 .collect(Collectors.toList());
     }
 
-    private void run(TaskModel<I, ?> task, Map<TaskModel<I, ?>, Integer> indegreeMap) {
+    @Data
+    @AllArgsConstructor
+    private static class ResultDTO<I> {
+        private TaskModel<I, ?> task;
+        private Object data;
+    }
+
+    private ResultDTO<I> run(TaskModel<I, ?> task, Context<I> context) {
         Object o = task.getFunction().apply(context);
-        synchronized (contextLock) {
-            contextModel.set(task.getResult(), o);
-
-            if (task == outputTask) {
-                complete = true;
-                contextLock.notify();
-                return;
-            }
-        }
-        synchronized (indegreeMapLock) {
-            for (TaskModel<I, ?> dependent : task.getDependents()) {
-                Integer outdegree = indegreeMap.get(dependent);
-                outdegree--;
-                indegreeMap.put(dependent, outdegree);
-                if (outdegree == 0) {
-                    executorService.submit(() -> run(dependent, indegreeMap));
-                }
-            }
-        }
-
+        return new ResultDTO<>(task, o);
     }
 
     @RequiredArgsConstructor
