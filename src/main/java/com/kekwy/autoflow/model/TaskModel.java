@@ -1,7 +1,6 @@
 package com.kekwy.autoflow.model;
 
 import com.kekwy.autoflow.dsl.Result;
-import com.kekwy.autoflow.dsl.Task;
 import com.kekwy.autoflow.dsl.TaskFunction;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

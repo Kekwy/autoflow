@@ -21,6 +21,8 @@ import java.util.concurrent.Executors;
 
 public class DataFlow<I, O> {
 
+    private static final String NOTICE = "Results are only available when defining task, not during the stage.";
+
     @Getter
     private final String name;
     private final TaskModel<I, O> outputTask;
@@ -40,11 +42,10 @@ public class DataFlow<I, O> {
         return executor.execute(context, outputTask, executorService);
     }
 
-    public void print() {
-        System.out.println("================ tasks graph begin ================\n" +
+    public String toPlantuml() {
+        return "================ tasks graph begin ================\n" +
                 Printer.toPlantuml(outputTask) +
-                "================ tasks graph end   ================\n"
-        );
+                "================ tasks graph end   ================\n";
     }
 
     @FunctionalInterface
@@ -65,12 +66,18 @@ public class DataFlow<I, O> {
         }
 
         public DataFlow<I, O> get() {
+            if (state.getStage() != StateModel.Stage.DEFINE_FLOW) {
+                throw new AutoFlowException(NOTICE);
+            }
             state.setStage(StateModel.Stage.COMPLETE);
             return new DataFlow<>(name, outputTask);
         }
 
         @Override
         public void output(Task<O> task) {
+            if (state.getStage() != StateModel.Stage.DEFINE_FLOW) {
+                throw new AutoFlowException(NOTICE);
+            }
             try {
                 //noinspection unchecked
                 outputTask = (TaskModel<I, O>) Optional.ofNullable(taskModelMap.get(task))
@@ -82,6 +89,9 @@ public class DataFlow<I, O> {
 
         @Override
         public <R> Task<R> task(String name, TaskFunction.Supplier<I, R> supplier) {
+            if (state.getStage() != StateModel.Stage.DEFINE_FLOW) {
+                throw new AutoFlowException(NOTICE);
+            }
             TaskModel<I, R> taskModel = new TaskModel<>(name);
 
             state.setTask(taskModel);
@@ -116,19 +126,14 @@ public class DataFlow<I, O> {
             taskModel.setFunction(function);
         }
 
-        private static final String NOTICE = "Results are only available when defining task, not during the stage.";
 
         @Override
         public Result<R> result() {
-            switch (state.getStage()) {
-                case DEFINE_FLOW:
-                case COMPLETE:
-                    throw new AutoFlowException(NOTICE);
-                case DEFINE_TASK: {
-                    // process dependencies
-                    this.taskModel.addDependent(state.getTask());
-                }
+            if (state.getStage() != StateModel.Stage.DEFINE_TASK) {
+                throw new AutoFlowException(NOTICE);
             }
+            // process dependencies
+            this.taskModel.addDependent(state.getTask());
             return taskModel.getResult();
         }
     }
